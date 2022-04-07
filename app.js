@@ -115,7 +115,20 @@ app.post('/signup',(req,res)=>{
 
 })
 
+app.get('/new-tyd', (req,res)=>{
+    res.render('new-tyd.ejs')
+})
 
+app.post('/new-tyd',(req,res)=>{
+    connection.query(
+        'INSERT INTO tyds WHERE tyds(tyd, userid)VALUES(?,?)',
+        [req.body.tyd],
+        (error,results)=>{
+            console.log(error)
+            res.render('about-us.ejs')
+        }
+    )
+})
                 
                 
 const PORT = process.env.PORT || 3000
