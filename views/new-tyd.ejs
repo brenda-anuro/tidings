@@ -1,0 +1,15 @@
+<%- include('partials/header')%>
+    <main id="new-tyd">
+
+  <%- include('partials/nav')%>
+
+    <!-- <h1>add tyd</h1> -->
+   <form action="/tyd" method="post">
+      <label for="">share your tyd with the world</label>
+      <textarea name="tyd" cols="30" rows="10"></textarea>
+      <input type="submit" value="Post">
+   </form>
+
+</main>
+
+<%- include('partials/footer')%>

@@ -1,7 +1,7 @@
 const express = require('express')
 const mysql = require('mysql')
 const bcrypt = require('bcrypt')
-const session = ('express-session')
+const session = require('express-session')
 
 const app = express()
 
@@ -15,6 +15,24 @@ const connection = mysql.createConnection({
 app.set('view engine', 'ejs')
 app.use(express.static('public'))
 app.use(express.urlencoded({extended: false}))
+
+app.use(session({
+    secret: 'elections',
+    resave: false,
+    saveUninitialized: false
+
+}))
+
+app.use((req, res, next)=>{
+    if(req.session.userId === undefined){
+        res.locals.isLoggedIn = false
+    }else{
+        res.locals.isLoggedIn = true
+        res.locals.userId = req.session.userId
+        res.locals.username = req.session.username
+    }
+    next()
+})
 
 
 app.get('/', (req,res)=>{
@@ -46,7 +64,10 @@ app.post('/login',(req,res)=>{
            if(results.length > 0){
                bcrypt.compare(user.password, results[0].password,(error, isEqual)=>{
                    if(isEqual){
-                        res.redirect('/')
+                       req.session.userId = results[0].id
+                       req.session.username = results[0].fullname.split(' ')[0].toLowerCase()
+                      
+                        res.redirect('/tyds')
                    }else{
                        let message = 'email/password mismatch.'
                        res.render('login.ejs', {error:true, message:message, user:user})
@@ -62,6 +83,7 @@ app.post('/login',(req,res)=>{
 
 
 })
+
 
  app.get('/signup', (req,res)=>{
    let user = {
@@ -116,19 +138,131 @@ app.post('/signup',(req,res)=>{
 })
 
 app.get('/new-tyd', (req,res)=>{
+   if(res.locals.isLoggedIn){
     res.render('new-tyd.ejs')
+   }else{
+       res.redirect('/login')
+   }
 })
 
 app.post('/new-tyd',(req,res)=>{
+ connection.query(
+     'INSERT INTO tyds (tyd, userid) VALUES (?,?)',
+     [req.body.tyd, req.session.userId],
+     (error, results)=>{
+         res.redirect('/tyds')
+
+     }
+ )
+
+
+})
+app.get('/tyds', (req, res)=>{
+    if(res.locals.isLoggedIn){
+        connection.query(
+            'SELECT fullname, tyds.id AS tydID, tyd, likes, dateposted FROM tyds JOIN users ON tyds.userid = users.id ORDER BY dateposted DESC',
+            (error, results)=>{
+                res.render('tyds.ejs', {tyds: results})
+            }
+        )
+    }else{
+        res.redirect('/login')
+    }
+})
+
+
+app.post('/like/:id',(req,res)=>{
     connection.query(
-        'INSERT INTO tyds WHERE tyds(tyd, userid)VALUES(?,?)',
-        [req.body.tyd],
-        (error,results)=>{
-            console.log(error)
-            res.render('about-us.ejs')
+        'SELECT * FROM likes WHERE tydId =?',
+        [parseInt(req.params.id)],
+        (error,results)=> {
+            if(results.length > 0){
+                connection.query(
+                    'DELETE FROM likes WHERE tydId = ? AND userId = ?',
+                    [parseInt(req.params.id), req.session.userId],
+                    (error,results)=>{
+                        connection.query(
+                            'UPDATE tyds SET likes = likes -1 WHERE id = ?',
+                            [parseInt(req.params.id)],
+                            (error,results)=>{
+                                res.redirect('/tyds')
+                            }
+                        )
+                    }
+                )
+
+            }else{
+                connection.query(
+                    'INSERT INTO likes (tydId,userid) VALUES (?,?)',
+                    [parseInt(req.params.id), req.session.userId],
+                    (error,results)=>{
+                            connection.query (
+                                'UPDATE tyds SET likes = likes + 1 WHERE id = ?',
+                                [parseInt(req.params.id)],
+                                (error,results)=>{
+                                    res.redirect('/tyds')
+                                }
+                            )
+                    }
+                )
+            }
         }
     )
 })
+
+
+// app.post('/updatelikes', (req, res) => {
+//     let tydId = parseInt(req.query.tydId)
+//     let userID = parseInt(req.query.userID)
+//     console.log(userID)
+//     console.log(tydId)
+//     connection.query(
+//         'SELECT * FROM likes WHERE tydId= ? AND userID=?',
+//         [tydId,userID],
+//         (error, likes) => {
+//             if(error){
+//                 console.log(error)
+//             } else {
+//                 if(likes.length > 0) {
+//                     // remove from db
+//                     connection.query(
+//                         'DELETE FROM likes WHERE tydId =? AND userID =?',
+//                         [tydId, userID],
+//                         (error, results) => {
+//                             console.log('like deleted from db')
+//                             res.redirect('/tyds')
+//                         }
+//                     )
+//                 } else {
+//                     connection.query(
+//                         'INSERT INTO likes (tydId, userID) VALUES(?,?)',
+//                         [tydId, userID],
+//                         (error, results) => {
+//                             if(error){
+//                                 console.log(error)
+//                             } else {
+//                                 console.log('likes updated')
+//                                 res.redirect('/tyds')
+//                             }
+//                         }
+//                     )
+//                 }
+                
+//             }
+//         }
+//     )
+
+// });
+
+
+
+
+
+app.get('/logout', (req,res)=>{
+    res.session.destroy((error)=>{
+        res.redirect('/')
+    })
+}) 
                 
                 
 const PORT = process.env.PORT || 3000
